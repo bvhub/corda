@@ -34,7 +34,7 @@ class CompatibleTransactionTests : TestDependencyInjectionBase() {
 
     private val inputGroup by lazy { ComponentGroup(INPUTS_GROUP.ordinal, inputs.map { it.serialize() }) }
     private val outputGroup by lazy { ComponentGroup(OUTPUTS_GROUP.ordinal, outputs.map { it.serialize() }) }
-    private val commandGroup by lazy { ComponentGroup(COMMANDS_GROUP.ordinal, commands.map { it.serialize() }) }
+    private val commandGroup by lazy { ComponentGroup(COMMANDS_GROUP.ordinal, commands.map { it.value.serialize() }) }
     private val attachmentGroup by lazy { ComponentGroup(ATTACHMENTS_GROUP.ordinal, attachments.map { it.serialize() }) } // The list is empty.
     private val notaryGroup by lazy { ComponentGroup(NOTARY_GROUP.ordinal, listOf(notary.serialize())) }
     private val timeWindowGroup by lazy { ComponentGroup(TIMEWINDOW_GROUP.ordinal, listOf(timeWindow.serialize())) }
@@ -285,7 +285,7 @@ class CompatibleTransactionTests : TestDependencyInjectionBase() {
         val componentGroups = listOf(
                 inputGroup,
                 outputGroup,
-                ComponentGroup(COMMANDS_GROUP.ordinal, twoCommandsforKey1.map { it.serialize() }),
+                ComponentGroup(COMMANDS_GROUP.ordinal, twoCommandsforKey1.map { it.value.serialize() }),
                 notaryGroup,
                 timeWindowGroup,
                 ComponentGroup(SIGNERS_GROUP.ordinal, twoCommandsforKey1.map { it.signers.serialize() }),
@@ -351,38 +351,19 @@ class CompatibleTransactionTests : TestDependencyInjectionBase() {
         oneKey1CommandFtxA.checkAllComponentsVisible(SIGNERS_GROUP) // If at least one Command is visible, then all Signers are visible.
         oneKey1CommandFtxB.checkAllComponentsVisible(SIGNERS_GROUP) // If at least one Command is visible, then all Signers are visible.
 
-        // We don't send a list of signers (old clients).
+        // We don't send a list of signers.
         val componentGroupsCompatible = listOf(
                 inputGroup,
                 outputGroup,
-                ComponentGroup(COMMANDS_GROUP.ordinal, twoCommandsforKey1.map { it.serialize() }),
+                ComponentGroup(COMMANDS_GROUP.ordinal, twoCommandsforKey1.map { it.value.serialize() }),
                 notaryGroup,
                 timeWindowGroup,
                 // ComponentGroup(SIGNERS_GROUP.ordinal, twoCommandsforKey1.map { it.signers.serialize() }),
                 newUnknownComponentGroup // A new unknown component with ordinal 100 that we cannot process.
         )
 
-        val wtxCompatible = WireTransaction(componentGroups = componentGroupsCompatible, privacySalt = PrivacySalt())
-
-        val allCommandsFtxCompatible = wtxCompatible.buildFilteredTransaction(Predicate(::filterCommandsOnly))
-        val noCommandsFtxCompatible = wtxCompatible.buildFilteredTransaction(Predicate(::filterOutCommands))
-        val key1CommandsFtxCompatible = wtxCompatible.buildFilteredTransaction(Predicate(::filterKEY1Commands))
-        val oneKey1CommandFtxACompatible = wtxCompatible.buildFilteredTransaction(Predicate(::filterTwoSignersCommands))
-        val oneKey1CommandFtxBCompatible = wtxCompatible.buildFilteredTransaction(Predicate(::filterSingleSignersCommands))
-
-        allCommandsFtxCompatible.checkCommandVisibility(DUMMY_KEY_1.public)
-        assertFailsWith<ComponentVisibilityException> { noCommandsFtxCompatible.checkCommandVisibility(DUMMY_KEY_1.public) }
-        // TODO: Old clients should send all commands, because there is no other way to decide if I see all related commands.
-        assertFailsWith<ComponentVisibilityException> { key1CommandsFtxCompatible.checkCommandVisibility(DUMMY_KEY_1.public) }
-        assertFailsWith<ComponentVisibilityException> { oneKey1CommandFtxACompatible.checkCommandVisibility(DUMMY_KEY_1.public) }
-        assertFailsWith<ComponentVisibilityException> { oneKey1CommandFtxBCompatible.checkCommandVisibility(DUMMY_KEY_1.public) }
-
-        // Because SIGNERS_GROUP is an empty group, checkAllComponentsVisible(SIGNERS_GROUP) always passes.
-        allCommandsFtxCompatible.checkAllComponentsVisible(SIGNERS_GROUP)
-        noCommandsFtxCompatible.checkAllComponentsVisible(SIGNERS_GROUP)
-        key1CommandsFtxCompatible.checkAllComponentsVisible(SIGNERS_GROUP)
-        oneKey1CommandFtxACompatible.checkAllComponentsVisible(SIGNERS_GROUP)
-        oneKey1CommandFtxBCompatible.checkAllComponentsVisible(SIGNERS_GROUP)
+        // Invalid Transaction. Sizes of CommandData and Signers (empty) do not match.
+        assertFailsWith<IllegalStateException> { WireTransaction(componentGroups = componentGroupsCompatible, privacySalt = PrivacySalt()) }
 
         // Test if there is no command to sign.
         val commandsNoKey1= listOf(dummyCommand(DUMMY_KEY_2.public))
@@ -390,7 +371,7 @@ class CompatibleTransactionTests : TestDependencyInjectionBase() {
         val componentGroupsNoKey1ToSign = listOf(
                 inputGroup,
                 outputGroup,
-                ComponentGroup(COMMANDS_GROUP.ordinal, commandsNoKey1.map { it.serialize() }),
+                ComponentGroup(COMMANDS_GROUP.ordinal, commandsNoKey1.map { it.value.serialize() }),
                 notaryGroup,
                 timeWindowGroup,
                 ComponentGroup(SIGNERS_GROUP.ordinal, commandsNoKey1.map { it.signers.serialize() }),

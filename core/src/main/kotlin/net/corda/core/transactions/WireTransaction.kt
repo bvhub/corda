@@ -214,10 +214,8 @@ class WireTransaction(componentGroups: List<ComponentGroup>, val privacySalt: Pr
             val componentGroupMap: MutableList<ComponentGroup> = mutableListOf()
             if (inputs.isNotEmpty()) componentGroupMap.add(ComponentGroup(INPUTS_GROUP.ordinal, inputs.map { it.serialize() }))
             if (outputs.isNotEmpty()) componentGroupMap.add(ComponentGroup(OUTPUTS_GROUP.ordinal, outputs.map { it.serialize() }))
-            // TODO: In the future we could only serialise CommandData as part of the COMMANDS_GROUP and then
-            //      construct a Command object based on this and the signers group.
-            //      We don't do it now, because it will break backwards compatibility.
-            if (commands.isNotEmpty()) componentGroupMap.add(ComponentGroup(COMMANDS_GROUP.ordinal, commands.map { it.serialize() }))
+            // Adding commandData only to the commands group. Signers are added in their own group.
+            if (commands.isNotEmpty()) componentGroupMap.add(ComponentGroup(COMMANDS_GROUP.ordinal, commands.map { it.value.serialize() }))
             if (attachments.isNotEmpty()) componentGroupMap.add(ComponentGroup(ATTACHMENTS_GROUP.ordinal, attachments.map { it.serialize() }))
             if (notary != null) componentGroupMap.add(ComponentGroup(NOTARY_GROUP.ordinal, listOf(notary.serialize())))
             if (timeWindow != null) componentGroupMap.add(ComponentGroup(TIMEWINDOW_GROUP.ordinal, listOf(timeWindow.serialize())))

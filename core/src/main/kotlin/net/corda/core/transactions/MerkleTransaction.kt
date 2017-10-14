@@ -25,7 +25,7 @@ abstract class TraversableTransaction(open val componentGroups: List<ComponentGr
     override val outputs: List<TransactionState<ContractState>> = deserialiseComponentGroup(ComponentGroupEnum.OUTPUTS_GROUP, { SerializedBytes<TransactionState<ContractState>>(it).deserialize(context = SerializationFactory.defaultFactory.defaultContext.withAttachmentsClassLoader(attachments)) })
 
     /** Ordered list of ([CommandData], [PublicKey]) pairs that instruct the contracts what to do. */
-    val commands: List<Command<*>> = deserialiseComponentGroup(ComponentGroupEnum.COMMANDS_GROUP, { SerializedBytes<Command<*>>(it).deserialize(context = SerializationFactory.defaultFactory.defaultContext.withAttachmentsClassLoader(attachments)) })
+    val commands: List<Command<*>> = deserialiseCommands()
 
     override val notary: Party? = let {
         val notaries: List<Party> = deserialiseComponentGroup(ComponentGroupEnum.NOTARY_GROUP, { SerializedBytes<Party>(it).deserialize() })
@@ -74,6 +74,25 @@ abstract class TraversableTransaction(open val componentGroups: List<ComponentGr
             emptyList()
         }
     }
+
+    // Method to deserialise Commands from its two groups:
+    // COMMANDS_GROUP which contains the CommandData part
+    // and SIGNERS_GROUP which contains the Signers part.
+    private fun deserialiseCommands(): List<Command<*>> {
+        val signersList = deserialiseComponentGroup(ComponentGroupEnum.SIGNERS_GROUP, { SerializedBytes<List<PublicKey>>(it).deserialize() })
+        val commandDataList = deserialiseComponentGroup(ComponentGroupEnum.COMMANDS_GROUP, { SerializedBytes<CommandData>(it).deserialize(context = SerializationFactory.defaultFactory.defaultContext.withAttachmentsClassLoader(attachments)) })
+        val group = componentGroups.first { it.groupIndex == ComponentGroupEnum.COMMANDS_GROUP.ordinal }
+        if (group is FilteredComponentGroup) {
+            check(commandDataList.size <= signersList.size) { "Invalid Transaction. Less Signers (${signersList.size}) than CommandData (${commandDataList.size}) objects" }
+            val componentHashes = group.components.mapIndexed { index, component -> componentHash(group.nonces[index], component) }
+            val leafIndices = componentHashes.map { group.partialMerkleTree.leafIndex(it) }
+            return commandDataList.mapIndexed { index, commandData -> Command(commandData, signersList[leafIndices[index]]) }
+        } else {
+            // It is a WireTransaction.
+            check(commandDataList.size == signersList.size) { "Invalid Transaction. Sizes of CommandData (${commandDataList.size}) and Signers (${signersList.size}) do not match" }
+            return commandDataList.mapIndexed { index, commandData -> Command(commandData, signersList[index]) }
+        }
+    }
 }
 
 /**
@@ -116,7 +135,7 @@ class FilteredTransaction private constructor(
             fun <T : Any> filter(t: T, componentGroupIndex: Int, internalIndex: Int) {
                 if (filtering.test(t)) {
                     val group = filteredSerialisedComponents[componentGroupIndex]
-                    // Because the filter passed, we know there is a match. We also use first vs single as the init function
+                    // Because the filter passed, we know there is a match. We also use first Vs single as the init function
                     // of WireTransaction ensures there are no duplicated groups.
                     val serialisedComponent = wtx.componentGroups.first { it.groupIndex == componentGroupIndex }.components[internalIndex]
                     if (group == null) {
@@ -137,15 +156,12 @@ class FilteredTransaction private constructor(
                     // This is required for visibility purposes, see FilteredTransaction.checkAllCommandsVisible() for more details.
                     if (componentGroupIndex == ComponentGroupEnum.COMMANDS_GROUP.ordinal && !signersIncluded) {
                         signersIncluded = true
-                        val signersGroupComponents = wtx.componentGroups.firstOrNull { it.groupIndex == ComponentGroupEnum.SIGNERS_GROUP.ordinal }
-                        // Check if there is indeed a SIGNERS_GROUP. It is possible that this transaction was sent from an old client,
-                        // in which case there is no signers group to send.
-                        if (signersGroupComponents != null) {
-                            val groupIndex = signersGroupComponents.groupIndex
-                            filteredSerialisedComponents.put(groupIndex, signersGroupComponents.components.toMutableList())
-                            filteredComponentNonces.put(groupIndex, wtx.availableComponentNonces[groupIndex]!!.toMutableList())
-                            filteredComponentHashes.put(groupIndex, wtx.availableComponentHashes[groupIndex]!!.toMutableList())
-                        }
+                        val signersGroupIndex = ComponentGroupEnum.SIGNERS_GROUP.ordinal
+                        // There exist commands, thus the signers group is not empty.
+                        val signersGroupComponents = wtx.componentGroups.first { it.groupIndex == signersGroupIndex }
+                        filteredSerialisedComponents.put(signersGroupIndex, signersGroupComponents.components.toMutableList())
+                        filteredComponentNonces.put(signersGroupIndex, wtx.availableComponentNonces[signersGroupIndex]!!.toMutableList())
+                        filteredComponentHashes.put(signersGroupIndex, wtx.availableComponentHashes[signersGroupIndex]!!.toMutableList())
                     }
                 }
             }
@@ -273,7 +289,7 @@ class FilteredTransaction private constructor(
         } else {
             checkAllComponentsVisible(ComponentGroupEnum.SIGNERS_GROUP)
             val expectedNumOfCommands = expectedNumOfCommands(publicKey, commandSigners)
-            val receivedForThisKeyNumOfCommands = commands.filter { it.signers.contains(publicKey) }.size
+            val receivedForThisKeyNumOfCommands = commands.filter { publicKey in it.signers }.size
             visibilityCheck(expectedNumOfCommands == receivedForThisKeyNumOfCommands) { "$expectedNumOfCommands commands were expected, but received $receivedForThisKeyNumOfCommands" }
         }
     }
