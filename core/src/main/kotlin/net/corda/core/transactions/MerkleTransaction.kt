@@ -79,6 +79,9 @@ abstract class TraversableTransaction(open val componentGroups: List<ComponentGr
     // COMMANDS_GROUP which contains the CommandData part
     // and SIGNERS_GROUP which contains the Signers part.
     private fun deserialiseCommands(): List<Command<*>> {
+        // TODO: we could avoid deserialising unrelated signers.
+        //      However, current approach ensures the transaction is not malformed
+        //      and it will throw if any of the signers objects is not List of public keys).
         val signersList = deserialiseComponentGroup(ComponentGroupEnum.SIGNERS_GROUP, { SerializedBytes<List<PublicKey>>(it).deserialize() })
         val commandDataList = deserialiseComponentGroup(ComponentGroupEnum.COMMANDS_GROUP, { SerializedBytes<CommandData>(it).deserialize(context = SerializationFactory.defaultFactory.defaultContext.withAttachmentsClassLoader(attachments)) })
         val group = componentGroups.firstOrNull { it.groupIndex == ComponentGroupEnum.COMMANDS_GROUP.ordinal }

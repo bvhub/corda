@@ -365,6 +365,20 @@ class CompatibleTransactionTests : TestDependencyInjectionBase() {
         // Invalid Transaction. Sizes of CommandData and Signers (empty) do not match.
         assertFailsWith<IllegalStateException> { WireTransaction(componentGroups = componentGroupsCompatible, privacySalt = PrivacySalt()) }
 
+        // We send smaller list of signers.
+        val componentGroupsLessSigners = listOf(
+                inputGroup,
+                outputGroup,
+                ComponentGroup(COMMANDS_GROUP.ordinal, twoCommandsforKey1.map { it.value.serialize() }),
+                notaryGroup,
+                timeWindowGroup,
+                ComponentGroup(SIGNERS_GROUP.ordinal, twoCommandsforKey1.map { it.signers.serialize() }.subList(0, 1)), // Send first signer only.
+                newUnknownComponentGroup // A new unknown component with ordinal 100 that we cannot process.
+        )
+
+        // Invalid Transaction. Sizes of CommandData and Signers (empty) do not match.
+        assertFailsWith<IllegalStateException> { WireTransaction(componentGroups = componentGroupsLessSigners, privacySalt = PrivacySalt()) }
+
         // Test if there is no command to sign.
         val commandsNoKey1= listOf(dummyCommand(DUMMY_KEY_2.public))
 
@@ -380,7 +394,7 @@ class CompatibleTransactionTests : TestDependencyInjectionBase() {
 
         val wtxNoKey1 = WireTransaction(componentGroups = componentGroupsNoKey1ToSign, privacySalt = PrivacySalt())
         val allCommandsNoKey1Ftx= wtxNoKey1.buildFilteredTransaction(Predicate(::filterCommandsOnly))
-        allCommandsNoKey1Ftx.checkCommandVisibility(DUMMY_KEY_1.public) // This will pass, because there are indeed no commands to sign.
+        allCommandsNoKey1Ftx.checkCommandVisibility(DUMMY_KEY_1.public) // This will pass, because there are indeed no commands to sign in the original transaction.
     }
 }
 

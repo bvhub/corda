@@ -159,7 +159,11 @@ class PartialMerkleTree(val root: PartialTree) {
         return (verifyRoot == merkleRootHash)
     }
 
-    /** Method to return the index of the input leaf in the partial Merkle tree structure. */
+    /**
+     * Method to return the index of the input leaf in the partial Merkle tree structure.
+     * @param leaf the component hash to check.
+     * @return leaf-index of this component (starting from zero).
+     */
     internal fun leafIndex(leaf: SecureHash): Int {
         // Special handling if the tree consists of one node only.
         if (root is PartialTree.IncludedLeaf && root.hash == leaf) return 0
