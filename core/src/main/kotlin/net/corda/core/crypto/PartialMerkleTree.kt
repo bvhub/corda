@@ -172,9 +172,7 @@ class PartialMerkleTree(val root: PartialTree) {
     // Because the path is updated recursively, the path is returned in reverse order.
     private fun leafIndexHelper(leaf: SecureHash, node: PartialTree, path: MutableList<Boolean>): Boolean {
         if (node is PartialTree.IncludedLeaf) {
-            if (node.hash == leaf) {
-                return true
-            }
+            return node.hash == leaf
         } else if (node is PartialTree.Node) {
             if (leafIndexHelper(leaf, node.left, path)) {
                 path.add(false)

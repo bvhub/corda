@@ -81,14 +81,15 @@ abstract class TraversableTransaction(open val componentGroups: List<ComponentGr
     private fun deserialiseCommands(): List<Command<*>> {
         val signersList = deserialiseComponentGroup(ComponentGroupEnum.SIGNERS_GROUP, { SerializedBytes<List<PublicKey>>(it).deserialize() })
         val commandDataList = deserialiseComponentGroup(ComponentGroupEnum.COMMANDS_GROUP, { SerializedBytes<CommandData>(it).deserialize(context = SerializationFactory.defaultFactory.defaultContext.withAttachmentsClassLoader(attachments)) })
-        val group = componentGroups.first { it.groupIndex == ComponentGroupEnum.COMMANDS_GROUP.ordinal }
+        val group = componentGroups.firstOrNull { it.groupIndex == ComponentGroupEnum.COMMANDS_GROUP.ordinal }
         if (group is FilteredComponentGroup) {
             check(commandDataList.size <= signersList.size) { "Invalid Transaction. Less Signers (${signersList.size}) than CommandData (${commandDataList.size}) objects" }
             val componentHashes = group.components.mapIndexed { index, component -> componentHash(group.nonces[index], component) }
             val leafIndices = componentHashes.map { group.partialMerkleTree.leafIndex(it) }
             return commandDataList.mapIndexed { index, commandData -> Command(commandData, signersList[leafIndices[index]]) }
         } else {
-            // It is a WireTransaction.
+            // It is a WireTransaction
+            // or a FilteredTransaction with no Commands (in which case group is null).
             check(commandDataList.size == signersList.size) { "Invalid Transaction. Sizes of CommandData (${commandDataList.size}) and Signers (${signersList.size}) do not match" }
             return commandDataList.mapIndexed { index, commandData -> Command(commandData, signersList[index]) }
         }
